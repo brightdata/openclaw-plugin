@@ -1,0 +1,42 @@
+{
+  "name": "@brightdata/brightdata-plugin",
+  "version": "1.0.0",
+  "description": "OpenClaw Bright Data plugin",
+  "type": "module",
+  "main": "index.ts",
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ],
+    "bundle": {
+      "stageRuntimeDependencies": true
+    }
+  },
+  "keywords": [
+    "openclaw",
+    "openclaw-plugin",
+    "brightdata",
+    "web-scraping",
+    "browser-automation",
+    "web-search"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/brightdata/openclaw-plugin"
+  },
+  "dependencies": {
+    "@sinclair/typebox": "0.34.48",
+    "playwright": "1.58.2"
+  },
+  "devDependencies": {
+    "openclaw": "latest",
+    "typescript": "^5.8.0",
+    "vitest": "^3.0.0"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  }
+}
