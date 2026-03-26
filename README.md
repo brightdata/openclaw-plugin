@@ -1,6 +1,6 @@
 <p align="center">
   <img src="assets/brightdata-logo.png" height="48" alt="Bright Data" />&nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="assets/openclaw-logo.png" height="48" alt="OpenClaw" />
+  <img src="assets/openclaw-logo.png" height="108" alt="OpenClaw" />
 </p>
 
 <h1 align="center">Bright Data Plugin for OpenClaw</h1>
