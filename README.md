@@ -1,6 +1,34 @@
-# Bright Data Plugin for OpenClaw
+<p align="center">
+  <img src="assets/brightdata-logo.png" height="48" alt="Bright Data" />&nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="assets/openclaw-logo.png" height="48" alt="OpenClaw" />
+</p>
 
-Web search, scraping, browser automation, and 50+ structured data tools — powered by [Bright Data](https://brightdata.com).
+<h1 align="center">Bright Data Plugin for OpenClaw</h1>
+
+<p align="center">
+  <strong>Web search · Scraping · Browser automation · 50+ structured data tools</strong><br/>
+  Powered by <a href="https://brightdata.com">Bright Data</a> — the world's leading web data platform
+</p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/@brightdata/brightdata-plugin"><img src="https://img.shields.io/npm/v/@brightdata/brightdata-plugin?color=0066CC&label=npm" alt="npm version" /></a>
+  <a href="https://www.npmjs.com/package/@brightdata/brightdata-plugin"><img src="https://img.shields.io/npm/dm/@brightdata/brightdata-plugin?color=0066CC" alt="npm downloads" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT license" /></a>
+  <a href="https://brightdata.com"><img src="https://img.shields.io/badge/Bright%20Data-Powered-orange" alt="Bright Data Powered" /></a>
+</p>
+
+---
+
+## What This Plugin Does
+
+This plugin brings the full power of Bright Data's infrastructure directly into your OpenClaw agent — no manual API wiring, no proxies to configure. Install once, and your agent gains:
+
+- **Real-time web search** via Google, Bing, and Yandex with geo-targeting
+- **Bot-bypass scraping** through Bright Data Web Unlocker — handles CAPTCHAs, JS rendering, and rate limits automatically
+- **Full browser automation** via a real Chromium instance routed through Bright Data's residential proxy network
+- **50+ structured data tools** for Amazon, LinkedIn, Instagram, TikTok, YouTube, Reddit, and more — no parsing required
+
+---
 
 ## Install
 
@@ -8,184 +36,228 @@ Web search, scraping, browser automation, and 50+ structured data tools — powe
 openclaw plugins install @brightdata/brightdata-plugin
 ```
 
+---
+
 ## Configure
 
-Set your Bright Data API token (get one at [brightdata.com](https://brightdata.com)):
+Get your API token at [brightdata.com](https://brightdata.com) → Account → API Token.
 
 ```bash
-# Option A: environment variable
-export BRIGHTDATA_API_TOKEN=your_token
+# Option A — environment variable (recommended for local dev)
+export BRIGHTDATA_API_TOKEN=your_token_here
 
-# Option B: OpenClaw config
-openclaw config set plugins.entries.brightdata.config.webSearch.apiKey your_token
+# Option B — OpenClaw config (recommended for persistent setups)
+openclaw config set plugins.entries.brightdata.config.webSearch.apiKey your_token_here
 ```
 
-The plugin auto-creates two proxy zones on first use: `mcp_unlocker` (Web Unlocker) and `mcp_browser` (Browser API). To use existing zones:
+> The plugin automatically creates two proxy zones on first use: `mcp_unlocker` (Web Unlocker) and `mcp_browser` (Browser API). No manual zone setup required.
+
+To use existing zones instead:
 
 ```bash
-export BRIGHTDATA_UNLOCKER_ZONE=my_unlocker_zone
-export BRIGHTDATA_BROWSER_ZONE=my_browser_zone
+export BRIGHTDATA_UNLOCKER_ZONE=my_existing_zone
+export BRIGHTDATA_BROWSER_ZONE=my_existing_browser_zone
 ```
-
-## What's Included
-
-**66 tools** across five categories:
-
-| Category | Tools | Description |
-|----------|-------|-------------|
-| [Search](#search) | 2 | Web search via Google, Bing, Yandex with geo-targeting |
-| [Scrape](#scrape) | 1 | Page extraction as markdown, text, or HTML — handles bot protection |
-| [Batch](#batch) | 2 | Parallel search and scrape (up to 5 items) |
-| [Browser](#browser-automation) | 14 | Full browser automation via Playwright CDP |
-| [Web Data](#web-data) | 47 | Structured data from Amazon, LinkedIn, Instagram, TikTok, and more |
 
 ---
 
-### Search
+## Tools Overview
 
-The plugin registers as an OpenClaw **web search provider** — it appears in provider selection automatically.
+**66 tools** across five categories:
 
-| Tool | Description |
-|------|-------------|
-| `brightdata_search` | Search Google, Bing, or Yandex with pagination, geo-targeting, and result count control |
+| Category | Count | What it does |
+|----------|------:|-------------|
+| [Search](#-search) | 2 | Real-time SERP results from Google, Bing, Yandex |
+| [Scrape](#-scrape) | 1 | Full-page extraction with bot bypass |
+| [Batch](#-batch-operations) | 2 | Parallel search and scrape up to 5 at a time |
+| [Browser](#-browser-automation) | 14 | Full browser control via residential proxies |
+| [Web Data](#-web-data--50-platforms) | 47 | Structured data from 47 platforms |
 
-```
-Parameters: query (required), engine ("google"|"bing"|"yandex"), count (1-10),
-            cursor, geo_location (2-letter ISO), timeoutSeconds
-```
+---
 
-### Scrape
+## Search
 
-| Tool | Description |
-|------|-------------|
-| `brightdata_scrape` | Fetch and extract a page through Bright Data Web Unlocker, including bot-protected pages |
+The plugin registers automatically as an OpenClaw **web search provider** — it appears alongside other providers in the search provider selection UI.
 
-```
-Parameters: url (required), extractMode ("markdown"|"text"|"html"), maxChars (≥100), timeoutSeconds
-```
+### `brightdata_search`
 
-### Batch
+Search Google, Bing, or Yandex and get structured results back.
 
-| Tool | Description |
-|------|-------------|
-| `brightdata_search_batch` | Run up to 5 search queries in parallel |
-| `brightdata_scrape_batch` | Scrape up to 5 URLs in parallel |
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `query` | `string` | **Required.** Search query |
+| `engine` | `"google" \| "bing" \| "yandex"` | Search engine (default: `google`) |
+| `count` | `number` | Results to return, 1–10 |
+| `cursor` | `string` | Pagination cursor for next page |
+| `geo_location` | `string` | 2-letter ISO country code (e.g. `"us"`, `"de"`) |
+| `timeoutSeconds` | `number` | Request timeout override |
 
-### Browser Automation
+### `brightdata_search_batch`
 
-Full browser control via Bright Data's residential proxy network. Sessions are scoped per user context and idle-timeout after 10 minutes.
+Run up to 5 search queries in parallel. Partial failures are returned inline without failing the whole batch.
+
+---
+
+## Scrape
+
+### `brightdata_scrape`
+
+Fetch any page through Bright Data Web Unlocker. Works on bot-protected sites, JavaScript-rendered pages, and geo-restricted content.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `url` | `string` | **Required.** HTTP/HTTPS URL to scrape |
+| `extractMode` | `"markdown" \| "text" \| "html"` | Output format (default: `markdown`) |
+| `maxChars` | `number` | Maximum characters to return (min: 100) |
+| `timeoutSeconds` | `number` | Request timeout override |
+
+### `brightdata_scrape_batch`
+
+Scrape up to 5 URLs in parallel with the same extraction options.
+
+---
+
+## Browser Automation
+
+Full Chromium browser control routed through Bright Data's residential proxy network. Sessions are automatically scoped per user context and idle-timeout after 10 minutes.
 
 | Tool | Description |
 |------|-------------|
 | `brightdata_browser_navigate` | Navigate to a URL (optional country routing) |
-| `brightdata_browser_go_back` | Go back |
-| `brightdata_browser_go_forward` | Go forward |
-| `brightdata_browser_snapshot` | Capture ARIA snapshot with interactive element refs |
-| `brightdata_browser_click` | Click an element by ref |
-| `brightdata_browser_type` | Type into an element by ref (optional submit) |
+| `brightdata_browser_snapshot` | Capture an ARIA snapshot with interactive element refs |
+| `brightdata_browser_click` | Click an element by its snapshot ref |
+| `brightdata_browser_type` | Type into a field by ref (optional Enter to submit) |
+| `brightdata_browser_fill_form` | Fill multiple form fields in a single operation |
 | `brightdata_browser_screenshot` | Take a screenshot (viewport or full page) |
-| `brightdata_browser_get_html` | Get page HTML |
-| `brightdata_browser_get_text` | Get page text content |
-| `brightdata_browser_scroll` | Scroll to bottom |
+| `brightdata_browser_get_html` | Get current page HTML |
+| `brightdata_browser_get_text` | Get current page text content |
+| `brightdata_browser_scroll` | Scroll to bottom of page |
 | `brightdata_browser_scroll_to` | Scroll to a specific element by ref |
-| `brightdata_browser_wait_for` | Wait for an element to be visible |
+| `brightdata_browser_wait_for` | Wait for an element to become visible |
 | `brightdata_browser_network_requests` | List network requests since page load |
-| `brightdata_browser_fill_form` | Fill multiple form fields in one operation |
+| `brightdata_browser_go_back` | Navigate back |
+| `brightdata_browser_go_forward` | Navigate forward |
 
-### Web Data
+---
 
-Structured data extraction from 47 platforms via Bright Data datasets. Each tool accepts a `url` or `keyword` input and returns structured JSON.
+## Web Data — 50+ Platforms
+
+Structured data from real pages via Bright Data datasets. Each tool accepts a `url` or `keyword` and returns clean, typed JSON — no scraping, no parsing.
 
 <details>
-<summary>All 47 dataset tools</summary>
+<summary><strong>E-commerce (10 tools)</strong></summary>
 
-**E-commerce**
-| Tool | Platform |
-|------|----------|
-| `brightdata_amazon_product` | Amazon product details |
-| `brightdata_amazon_product_reviews` | Amazon reviews |
-| `brightdata_amazon_product_search` | Amazon search results |
-| `brightdata_walmart_product` | Walmart product details |
-| `brightdata_walmart_seller` | Walmart seller info |
-| `brightdata_ebay_product` | eBay product details |
-| `brightdata_homedepot_products` | Home Depot products |
-| `brightdata_zara_products` | Zara products |
-| `brightdata_etsy_products` | Etsy products |
-| `brightdata_bestbuy_products` | Best Buy products |
+| Tool | Data |
+|------|------|
+| `brightdata_amazon_product` | Product details, pricing, specs |
+| `brightdata_amazon_product_reviews` | Customer reviews and ratings |
+| `brightdata_amazon_product_search` | Search results with rankings |
+| `brightdata_walmart_product` | Product details and availability |
+| `brightdata_walmart_seller` | Seller profile and metrics |
+| `brightdata_ebay_product` | Listing details and bids |
+| `brightdata_homedepot_products` | Product catalog and pricing |
+| `brightdata_zara_products` | Fashion catalog data |
+| `brightdata_etsy_products` | Handmade and vintage listings |
+| `brightdata_bestbuy_products` | Electronics catalog and deals |
 
-**Professional Networks**
-| Tool | Platform |
-|------|----------|
-| `brightdata_linkedin_person_profile` | LinkedIn person profile |
-| `brightdata_linkedin_company_profile` | LinkedIn company profile |
-| `brightdata_linkedin_job_listings` | LinkedIn jobs |
-| `brightdata_linkedin_posts` | LinkedIn posts |
-| `brightdata_linkedin_people_search` | LinkedIn people search |
-| `brightdata_crunchbase_company` | Crunchbase company data |
-| `brightdata_zoominfo_company_profile` | ZoomInfo company profile |
+</details>
 
-**Social Media — Instagram**
-| Tool | Platform |
-|------|----------|
-| `brightdata_instagram_profiles` | Instagram profiles |
-| `brightdata_instagram_posts` | Instagram posts |
-| `brightdata_instagram_reels` | Instagram reels |
-| `brightdata_instagram_comments` | Instagram comments |
+<details>
+<summary><strong>Professional Networks (7 tools)</strong></summary>
 
-**Social Media — Facebook**
-| Tool | Platform |
-|------|----------|
-| `brightdata_facebook_posts` | Facebook posts |
-| `brightdata_facebook_marketplace_listings` | Facebook Marketplace |
-| `brightdata_facebook_company_reviews` | Facebook company reviews |
-| `brightdata_facebook_events` | Facebook events |
+| Tool | Data |
+|------|------|
+| `brightdata_linkedin_person_profile` | Full person profile |
+| `brightdata_linkedin_company_profile` | Company overview and stats |
+| `brightdata_linkedin_job_listings` | Open positions with details |
+| `brightdata_linkedin_posts` | Post content and engagement |
+| `brightdata_linkedin_people_search` | People search results |
+| `brightdata_crunchbase_company` | Funding, investors, founders |
+| `brightdata_zoominfo_company_profile` | Company intelligence data |
 
-**Social Media — TikTok**
-| Tool | Platform |
-|------|----------|
-| `brightdata_tiktok_profiles` | TikTok profiles |
-| `brightdata_tiktok_posts` | TikTok posts |
-| `brightdata_tiktok_shop` | TikTok Shop |
-| `brightdata_tiktok_comments` | TikTok comments |
+</details>
 
-**Social Media — X (Twitter)**
-| Tool | Platform |
-|------|----------|
-| `brightdata_x_posts` | X posts |
-| `brightdata_x_profile_posts` | X profile posts |
+<details>
+<summary><strong>Social Media (17 tools)</strong></summary>
 
-**Social Media — YouTube & Reddit**
-| Tool | Platform |
-|------|----------|
-| `brightdata_youtube_profiles` | YouTube profiles |
-| `brightdata_youtube_videos` | YouTube videos |
-| `brightdata_youtube_comments` | YouTube comments |
-| `brightdata_reddit_posts` | Reddit posts |
+**Instagram**
+| Tool | Data |
+|------|------|
+| `brightdata_instagram_profiles` | Profile stats and bio |
+| `brightdata_instagram_posts` | Post content and engagement |
+| `brightdata_instagram_reels` | Reel metadata and views |
+| `brightdata_instagram_comments` | Comment threads |
 
-**Maps, Shopping & Apps**
-| Tool | Platform |
-|------|----------|
-| `brightdata_google_maps_reviews` | Google Maps reviews |
-| `brightdata_google_shopping` | Google Shopping |
-| `brightdata_google_play_store` | Google Play Store |
-| `brightdata_apple_app_store` | Apple App Store |
+**Facebook**
+| Tool | Data |
+|------|------|
+| `brightdata_facebook_posts` | Post content and reactions |
+| `brightdata_facebook_marketplace_listings` | Marketplace items |
+| `brightdata_facebook_company_reviews` | Page reviews and ratings |
+| `brightdata_facebook_events` | Event details and attendance |
 
-**Finance, News & Code**
-| Tool | Platform |
-|------|----------|
-| `brightdata_reuter_news` | Reuters news |
-| `brightdata_yahoo_finance_business` | Yahoo Finance |
-| `brightdata_github_repository_file` | GitHub repository files |
+**TikTok**
+| Tool | Data |
+|------|------|
+| `brightdata_tiktok_profiles` | Creator profile and stats |
+| `brightdata_tiktok_posts` | Video content and metrics |
+| `brightdata_tiktok_shop` | TikTok Shop product data |
+| `brightdata_tiktok_comments` | Comment threads |
 
-**Real Estate & Travel**
-| Tool | Platform |
-|------|----------|
-| `brightdata_zillow_properties_listing` | Zillow listings |
-| `brightdata_booking_hotel_listings` | Booking.com hotels |
+**X (Twitter)**
+| Tool | Data |
+|------|------|
+| `brightdata_x_posts` | Post content and metrics |
+| `brightdata_x_profile_posts` | Profile post history |
 
-**AI Insights**
-| Tool | Platform |
-|------|----------|
+**YouTube & Reddit**
+| Tool | Data |
+|------|------|
+| `brightdata_youtube_profiles` | Channel stats and info |
+| `brightdata_youtube_videos` | Video details and metrics |
+| `brightdata_youtube_comments` | Comment threads |
+| `brightdata_reddit_posts` | Post content and scores |
+
+</details>
+
+<details>
+<summary><strong>Maps, Shopping & Apps (4 tools)</strong></summary>
+
+| Tool | Data |
+|------|------|
+| `brightdata_google_maps_reviews` | Location reviews and ratings |
+| `brightdata_google_shopping` | Shopping results and prices |
+| `brightdata_google_play_store` | App details and reviews |
+| `brightdata_apple_app_store` | App details and reviews |
+
+</details>
+
+<details>
+<summary><strong>Finance, News & Code (3 tools)</strong></summary>
+
+| Tool | Data |
+|------|------|
+| `brightdata_reuter_news` | Reuters news articles |
+| `brightdata_yahoo_finance_business` | Company financials and news |
+| `brightdata_github_repository_file` | Repository file contents |
+
+</details>
+
+<details>
+<summary><strong>Real Estate & Travel (2 tools)</strong></summary>
+
+| Tool | Data |
+|------|------|
+| `brightdata_zillow_properties_listing` | Property listings and estimates |
+| `brightdata_booking_hotel_listings` | Hotel listings and pricing |
+
+</details>
+
+<details>
+<summary><strong>AI Insights (3 tools)</strong></summary>
+
+| Tool | Data |
+|------|------|
 | `brightdata_chatgpt_ai_insights` | ChatGPT responses |
 | `brightdata_grok_ai_insights` | Grok responses |
 | `brightdata_perplexity_ai_insights` | Perplexity responses |
@@ -196,18 +268,20 @@ Structured data extraction from 47 platforms via Bright Data datasets. Each tool
 
 ## Configuration Reference
 
-| Setting | Env Var | Config Path | Default |
-|---------|---------|-------------|---------|
-| API Token | `BRIGHTDATA_API_TOKEN` | `...webSearch.apiKey` | *required* |
+All settings can be provided via environment variable or OpenClaw config. Environment variables take priority.
+
+| Setting | Environment Variable | Config Path | Default |
+|---------|---------------------|-------------|---------|
+| API Token | `BRIGHTDATA_API_TOKEN` | `...webSearch.apiKey` | **required** |
 | Base URL | `BRIGHTDATA_BASE_URL` | `...webSearch.baseUrl` | `https://api.brightdata.com` |
 | Unlocker Zone | `BRIGHTDATA_UNLOCKER_ZONE` | `...webSearch.unlockerZone` | `mcp_unlocker` |
 | Browser Zone | `BRIGHTDATA_BROWSER_ZONE` | `...webSearch.browserZone` | `mcp_browser` |
-| Timeout | — | `...webSearch.timeoutSeconds` | `30` (search) / `60` (scrape) |
-| Polling Timeout | — | `...webSearch.pollingTimeoutSeconds` | `600` |
+| Request Timeout | — | `...webSearch.timeoutSeconds` | `30s` search / `60s` scrape |
+| Polling Timeout | — | `...webSearch.pollingTimeoutSeconds` | `600s` |
 
-Config paths are prefixed with `plugins.entries.brightdata.config`.
+> Config paths are prefixed with `plugins.entries.brightdata.config`.
 
-Environment variables take priority over config file values.
+---
 
 ## Plugin Management
 
@@ -215,20 +289,32 @@ Environment variables take priority over config file values.
 # Install
 openclaw plugins install @brightdata/brightdata-plugin
 
-# Verify
+# Verify installation and loaded tools
 openclaw plugins inspect brightdata
 
-# Disable / re-enable
-openclaw plugins disable brightdata
-openclaw plugins enable brightdata
-
-# Update
+# Update to latest version
 openclaw plugins update brightdata
+
+# Temporarily disable
+openclaw plugins disable brightdata
+
+# Re-enable
+openclaw plugins enable brightdata
 
 # Uninstall
 openclaw plugins uninstall brightdata
 ```
 
+---
+
+## Requirements
+
+- OpenClaw installed and running
+- A [Bright Data account](https://brightdata.com) with API token
+- Node.js 22+ (managed by OpenClaw)
+
+---
+
 ## License
 
-MIT
+MIT © [Bright Data](https://brightdata.com)

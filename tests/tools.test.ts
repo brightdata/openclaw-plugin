@@ -8,9 +8,6 @@ beforeEach(() => {
   vi.doUnmock("openclaw/plugin-sdk/provider-web-search");
 });
 
-// ---------------------------------------------------------------------------
-// brightdata_search tool
-// ---------------------------------------------------------------------------
 
 describe("brightdata_search tool", () => {
   it("passes query, engine, count, cursor, geo_location, and timeout to runBrightDataSearch", async () => {
@@ -90,9 +87,6 @@ describe("brightdata_search tool", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// brightdata_scrape tool
-// ---------------------------------------------------------------------------
 
 describe("brightdata_scrape tool", () => {
   it("passes url, extractMode, maxChars, and timeout to runBrightDataScrape", async () => {
@@ -212,9 +206,6 @@ describe("brightdata_scrape tool", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// brightdata web search provider
-// ---------------------------------------------------------------------------
 
 describe("brightdata web search provider", () => {
   it("returns provider with id brightdata and correct metadata", async () => {
