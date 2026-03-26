@@ -1,0 +1,14 @@
+# Development files
+tests/
+.github/
+tsconfig.json
+PLAN_PLUGIN.md
+E2E_TESTING.md
+
+# Build artifacts
+dist/
+*.tsbuildinfo
+
+# Local env
+.env
+.env.*
