@@ -1,6 +1,6 @@
 {
   "name": "@brightdata/brightdata-plugin",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "OpenClaw Bright Data plugin",
   "type": "module",
   "main": "index.ts",
@@ -12,7 +12,12 @@
       "stageRuntimeDependencies": true
     },
     "compat": {
-      "pluginApi": "^1.0.0"
+      "pluginApi": ">=2026.3.24",
+      "minGatewayVersion": "2026.3.24"
+    },
+    "build": {
+      "openclawVersion": "2026.3.28",
+      "pluginSdkVersion": "2026.3.28"
     }
   },
   "keywords": [
