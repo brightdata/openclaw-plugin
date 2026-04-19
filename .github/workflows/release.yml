@@ -15,10 +15,6 @@ jobs:
         with:
           node-version: 22
           cache: "npm"
-          registry-url: 'https://registry.npmjs.org'
-          scope: '@brightdata'
       - run: corepack enable && corepack prepare npm@11.5.2 --activate
       - run: npm ci
-      - run: npm audit signatures
-      - run: npm whoami
-      - run: npm publish --access public
+      - run: npm publish --provenance --access public
