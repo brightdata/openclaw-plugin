@@ -17,7 +17,7 @@ jobs:
           cache: "npm"
           registry-url: 'https://registry.npmjs.org'
           scope: '@brightdata'
-      - run: npm install -g npm@11
+      - run: corepack enable && corepack prepare npm@11.5.2 --activate
       - run: npm ci
       - run: npm audit signatures
       - run: npm whoami
