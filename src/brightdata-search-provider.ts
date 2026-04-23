@@ -1,6 +1,7 @@
 import { Type } from "@sinclair/typebox";
 import {
   enablePluginInConfig,
+  mergeScopedSearchConfig,
   resolveProviderWebSearchPluginConfig,
   setProviderWebSearchPluginConfigValue,
   type WebSearchProviderPlugin,
@@ -45,8 +46,8 @@ export function createBrightDataWebSearchProvider(): WebSearchProviderPlugin {
   return {
     id: "brightdata",
     label: "Bright Data Search",
-    hint: "SERP results via Google/Bing/Yandex with bot bypass",
-    envVars: ["BRIGHTDATA_API_TOKEN"],
+    hint: "SERP results via Google/Bing/Yandex with bot bypass (requires SERP zone)",
+    envVars: ["BRIGHTDATA_API_KEY", "BRIGHTDATA_API_TOKEN", "BRIGHTDATA_SERP_ZONE"],
     placeholder: "...",
     signupUrl: "https://brightdata.com/",
     docsUrl: "https://docs.openclaw.ai/tools/brightdata",
@@ -61,16 +62,24 @@ export function createBrightDataWebSearchProvider(): WebSearchProviderPlugin {
       setProviderWebSearchPluginConfigValue(configTarget, "brightdata", "apiKey", value);
     },
     applySelectionConfig: (config) => enablePluginInConfig(config, "brightdata").config,
-    createTool: (ctx) => ({
-      description:
-        "Search the web using Bright Data. Returns structured search results. Use brightdata_search for Bright Data-specific knobs like engine, cursor, or geo_location.",
-      parameters: GenericBrightDataSearchSchema,
-      execute: async (args) =>
-        await runBrightDataSearch({
-          pluginConfig: ctx.searchConfig ? { webSearch: ctx.searchConfig } : undefined,
-          query: typeof args.query === "string" ? args.query : "",
-          count: typeof args.count === "number" ? args.count : undefined,
-        }),
-    }),
+    createTool: (ctx) => {
+      const searchConfig = mergeScopedSearchConfig(
+        ctx.searchConfig,
+        "brightdata",
+        resolveProviderWebSearchPluginConfig(ctx.config, "brightdata"),
+        { mirrorApiKeyToTopLevel: true },
+      );
+      return {
+        description:
+          "Search the web using Bright Data SERP API. Requires a configured SERP zone and returns structured search results. Use brightdata_search for Bright Data-specific knobs like engine, cursor, or geo_location.",
+        parameters: GenericBrightDataSearchSchema,
+        execute: async (args) =>
+          await runBrightDataSearch({
+            pluginConfig: searchConfig ? { webSearch: searchConfig } : undefined,
+            query: typeof args.query === "string" ? args.query : "",
+            count: typeof args.count === "number" ? args.count : undefined,
+          }),
+      };
+    },
   };
 }

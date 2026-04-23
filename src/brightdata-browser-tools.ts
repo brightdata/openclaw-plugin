@@ -39,8 +39,10 @@ const DEFAULT_WAIT_FOR_TIMEOUT_MS = 30_000;
 const PAGE_METADATA_RETRY_DELAY_MS = 250;
 const PAGE_METADATA_RETRY_ATTEMPTS = 3;
 const PAGE_METADATA_WAIT_TIMEOUT_MS = 5_000;
-const BROWSER_SESSION_IDLE_TTL_MS = 10 * 60_000;
+const BROWSER_SESSION_IDLE_TTL_MS = 5 * 60_000;
 const BROWSER_SESSION_SWEEP_INTERVAL_MS = 60_000;
+const BROWSER_HISTORY_NOT_SUPPORTED_MESSAGE =
+  "History navigation is not supported under Bright Data browser session rules. Start a new navigation session with brightdata_browser_navigate instead.";
 
 type PlaywrightModuleLike = {
   chromium: {
@@ -326,6 +328,17 @@ function imageResult(text: string, data: Buffer, details?: Record<string, unknow
   };
 }
 
+function unsupportedBrowserHistoryResult(action: "back" | "forward") {
+  return textResult(BROWSER_HISTORY_NOT_SUPPORTED_MESSAGE, {
+    ok: false,
+    action,
+    error: {
+      code: "unsupported_operation",
+      message: BROWSER_HISTORY_NOT_SUPPORTED_MESSAGE,
+    },
+  });
+}
+
 function toSnakeCaseKey(key: string): string {
   return key
     .replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2")
@@ -464,7 +477,7 @@ async function requestBrowserApiJson(params: {
   const apiToken = resolveBrightDataApiToken(params.pluginConfig);
   if (!apiToken) {
     throw new Error(
-      "Bright Data browser tools need a Bright Data API token. Set BRIGHTDATA_API_TOKEN in the Gateway environment, or configure plugins.entries.brightdata.config.webSearch.apiKey.",
+      "Bright Data browser tools need a Bright Data API key. Set BRIGHTDATA_API_KEY (preferred) or BRIGHTDATA_API_TOKEN in the Gateway environment, or configure plugins.entries.brightdata.config.webSearch.apiKey.",
     );
   }
   const baseUrl = resolveBrightDataBaseUrl(params.pluginConfig);
@@ -532,11 +545,56 @@ function buildBrightDataBrowserCdpEndpoint(params: {
   return `wss://brd-customer-${params.customer}-zone-${params.zone}${countrySuffix}:${params.password}@brd.superproxy.io:9222`;
 }
 
+function parseBrowserAuth(rawValue: string): { customer: string; zone: string; password: string } | null {
+  const trimmed = rawValue.trim();
+  const separatorIndex = trimmed.indexOf(":");
+  if (separatorIndex <= 0 || separatorIndex >= trimmed.length - 1) {
+    return null;
+  }
+  const username = trimmed.slice(0, separatorIndex).trim();
+  const password = trimmed.slice(separatorIndex + 1);
+  const prefix = "brd-customer-";
+  const zoneMarker = "-zone-";
+  if (!username.startsWith(prefix)) {
+    return null;
+  }
+  const zoneIndex = username.lastIndexOf(zoneMarker);
+  if (zoneIndex <= prefix.length) {
+    return null;
+  }
+  const customer = username.slice(prefix.length, zoneIndex).trim();
+  const zone = username.slice(zoneIndex + zoneMarker.length).trim();
+  if (!customer || !zone || !password.trim()) {
+    return null;
+  }
+  return {
+    customer,
+    zone,
+    password,
+  };
+}
+
 async function resolveBrightDataBrowserCdpEndpoint(params: {
   pluginConfig?: Record<string, unknown> | BrightDataPluginConfig;
   country?: string;
 }): Promise<string> {
   const country = normalizeCountry(params.country);
+  const browserAuth = process.env.BROWSER_AUTH;
+  if (typeof browserAuth === "string" && browserAuth.trim()) {
+    const parsed = parseBrowserAuth(browserAuth);
+    if (!parsed) {
+      throw new Error(
+        'Invalid BROWSER_AUTH format. Expected "brd-customer-<customer>-zone-<zone>:<password>".',
+      );
+    }
+    return buildBrightDataBrowserCdpEndpoint({
+      customer: parsed.customer,
+      zone: parsed.zone,
+      password: parsed.password,
+      ...(country ? { country } : {}),
+    });
+  }
+
   const zone = resolveBrightDataBrowserZone(params.pluginConfig);
   const timeoutSeconds = resolveBrightDataBrowserTimeoutSeconds(params.pluginConfig);
 
@@ -1045,6 +1103,7 @@ type BrowserSessionParams = {
   pluginConfig?: Record<string, unknown> | BrightDataPluginConfig;
   country?: string;
   context?: OpenClawPluginToolContext;
+  forceFreshSession?: boolean;
   createSession?: (cdpEndpoint: string) => BrightDataBrowserSession;
   resolveCdpEndpoint?: (params: {
     pluginConfig?: Record<string, unknown> | BrightDataPluginConfig;
@@ -1138,7 +1197,8 @@ async function requireBrowserSessionEntry(
       ? normalizeCountry(params.country)
       : (existing?.country ?? undefined);
   const resolvedCountry = normalizedCountry ?? null;
-  const needsNewSession = !existing || resolvedCountry !== existing.country;
+  const needsNewSession =
+    params.forceFreshSession === true || !existing || resolvedCountry !== existing.country;
   if (needsNewSession) {
     if (existing) {
       browserSessionsByScope.delete(scopeKey);
@@ -1211,13 +1271,14 @@ export function createBrightDataBrowserTools(
 ) {
   const withToolBrowserSession = <T>(
     run: (session: BrightDataBrowserSession) => Promise<T>,
-    options?: { country?: string },
+    options?: { country?: string; forceFreshSession?: boolean },
   ) =>
     withBrowserSession(
       {
         pluginConfig: api.pluginConfig,
         context,
         ...(options?.country ? { country: options.country } : {}),
+        ...(options?.forceFreshSession ? { forceFreshSession: true } : {}),
       },
       run,
     );
@@ -1226,7 +1287,8 @@ export function createBrightDataBrowserTools(
     {
       name: "brightdata_browser_navigate",
       label: "Bright Data Browser Navigate",
-      description: "Navigate a Bright Data scraping browser session to a new URL.",
+      description:
+        "Navigate a Bright Data scraping browser session to a new URL. Each call starts a fresh session for this scope.",
       parameters: BrowserNavigateSchema,
       execute: async (_toolCallId: string, rawParams: Record<string, unknown>) => {
         const url = readStringParam(rawParams, "url", { required: true });
@@ -1254,53 +1316,28 @@ export function createBrightDataBrowserTools(
               },
             );
           },
-          country ? { country } : undefined,
+          {
+            ...(country ? { country } : {}),
+            forceFreshSession: true,
+          },
         );
       },
     },
     {
       name: "brightdata_browser_go_back",
       label: "Bright Data Browser Go Back",
-      description: "Go back to the previous page in the Bright Data browser session.",
+      description:
+        "Compatibility stub. History navigation is not supported; start a new session with brightdata_browser_navigate.",
       parameters: Type.Object({}, { additionalProperties: false }),
-      execute: async () =>
-        await withToolBrowserSession(async (session) => {
-          const page = await session.getPage();
-          session.clearRequests();
-          session.clearSnapshotState();
-          await page.goBack();
-          const metadata = await readPageMetadata(page);
-          return textResult(
-            [
-              "Successfully navigated back",
-              `Title: ${metadata.title}`,
-              `URL: ${metadata.url}`,
-            ].join("\n"),
-            { url: metadata.url, title: metadata.title },
-          );
-        }),
+      execute: async () => unsupportedBrowserHistoryResult("back"),
     },
     {
       name: "brightdata_browser_go_forward",
       label: "Bright Data Browser Go Forward",
-      description: "Go forward to the next page in the Bright Data browser session.",
+      description:
+        "Compatibility stub. History navigation is not supported; start a new session with brightdata_browser_navigate.",
       parameters: Type.Object({}, { additionalProperties: false }),
-      execute: async () =>
-        await withToolBrowserSession(async (session) => {
-          const page = await session.getPage();
-          session.clearRequests();
-          session.clearSnapshotState();
-          await page.goForward();
-          const metadata = await readPageMetadata(page);
-          return textResult(
-            [
-              "Successfully navigated forward",
-              `Title: ${metadata.title}`,
-              `URL: ${metadata.url}`,
-            ].join("\n"),
-            { url: metadata.url, title: metadata.title },
-          );
-        }),
+      execute: async () => unsupportedBrowserHistoryResult("forward"),
     },
     {
       name: "brightdata_browser_snapshot",
@@ -1578,6 +1615,7 @@ export function createBrightDataBrowserTools(
 }
 
 export const __testing = {
+  BROWSER_HISTORY_NOT_SUPPORTED_MESSAGE,
   BROWSER_SESSION_IDLE_TTL_MS,
   BROWSER_SESSION_SWEEP_INTERVAL_MS,
   BRIGHTDATA_BROWSER_TOOL_NAMES,
@@ -1590,8 +1628,10 @@ export const __testing = {
   },
   pruneIdleBrowserSessions,
   readPageMetadata,
+  parseBrowserAuth,
   requireBrowserSession,
   resolveBrowserSessionScopeKey,
   resolveBrightDataBrowserCdpEndpoint,
   resetBrowserSessions,
+  unsupportedBrowserHistoryResult,
 };

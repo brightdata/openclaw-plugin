@@ -2,8 +2,8 @@
   "id": "brightdata",
   "uiHints": {
     "webSearch.apiKey": {
-      "label": "Bright Data API Token",
-      "help": "Bright Data API token for search and scraping (fallback: BRIGHTDATA_API_TOKEN env var).",
+      "label": "Bright Data API Key",
+      "help": "Bright Data API key for search/scraping/browser/web-data (fallback env vars: BRIGHTDATA_API_KEY, then BRIGHTDATA_API_TOKEN).",
       "sensitive": true,
       "placeholder": "..."
     },
@@ -11,13 +11,17 @@
       "label": "Bright Data API Base URL",
       "help": "Bright Data API base URL override."
     },
+    "webSearch.serpZone": {
+      "label": "Bright Data SERP Zone",
+      "help": "Bright Data SERP zone name for search tools (required for brightdata_search and brightdata_search_batch)."
+    },
     "webSearch.unlockerZone": {
       "label": "Bright Data Unlocker Zone",
-      "help": "Bright Data Web Unlocker zone name (default: mcp_unlocker)."
+      "help": "Bright Data Web Unlocker zone name for scrape tools (default: mcp_unlocker)."
     },
     "webSearch.browserZone": {
       "label": "Bright Data Browser Zone",
-      "help": "Bright Data Browser API zone name (default: mcp_browser)."
+      "help": "Bright Data Browser API zone name for browser tools (default: mcp_browser, ignored when BROWSER_AUTH is set)."
     },
     "webSearch.timeoutSeconds": {
       "label": "Bright Data Timeout (sec)",
@@ -40,6 +44,9 @@
             "type": ["string", "object"]
           },
           "baseUrl": {
+            "type": "string"
+          },
+          "serpZone": {
             "type": "string"
           },
           "unlockerZone": {

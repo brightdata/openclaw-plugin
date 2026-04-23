@@ -33,7 +33,9 @@ describe("brightdata browser auth", () => {
     vi.resetModules();
     vi.unstubAllEnvs();
     withTrustedWebToolsEndpointMock.mockReset();
+    vi.stubEnv("BRIGHTDATA_API_KEY", "test-token");
     vi.stubEnv("BRIGHTDATA_API_TOKEN", "test-token");
+    vi.stubEnv("BROWSER_AUTH", "");
   });
 
   it("sends Bright Data bearer auth when resolving browser credentials", async () => {

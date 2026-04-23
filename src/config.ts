@@ -12,6 +12,7 @@ export type BrightDataPluginConfig = {
   webSearch?: {
     apiKey?: unknown;
     baseUrl?: string;
+    serpZone?: string;
     unlockerZone?: string;
     browserZone?: string;
     timeoutSeconds?: number;
@@ -59,6 +60,7 @@ export function resolveBrightDataApiToken(
   const search = resolveBrightDataSearchConfig(pluginConfig);
   return (
     normalizeConfiguredSecret(search?.apiKey, "plugins.entries.brightdata.config.webSearch.apiKey") ||
+    normalizeSecretInput(process.env.BRIGHTDATA_API_KEY) ||
     normalizeSecretInput(process.env.BRIGHTDATA_API_TOKEN) ||
     undefined
   );
@@ -84,6 +86,17 @@ export function resolveBrightDataUnlockerZone(
     normalizeSecretInput(process.env.BRIGHTDATA_UNLOCKER_ZONE) ||
     "";
   return configured || DEFAULT_BRIGHTDATA_UNLOCKER_ZONE;
+}
+
+export function resolveBrightDataSerpZone(
+  pluginConfig?: Record<string, unknown> | BrightDataPluginConfig,
+): string | undefined {
+  const search = resolveBrightDataSearchConfig(pluginConfig);
+  const configured =
+    readConfiguredString(search?.serpZone) ||
+    normalizeSecretInput(process.env.BRIGHTDATA_SERP_ZONE) ||
+    "";
+  return configured || undefined;
 }
 
 export function resolveBrightDataBrowserZone(

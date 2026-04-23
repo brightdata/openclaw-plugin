@@ -40,23 +40,27 @@ openclaw plugins install @brightdata/brightdata-plugin
 
 ## Configure
 
-Get your API token at [brightdata.com](https://brightdata.com) → Account → API Token.
+Get your API key at [brightdata.com](https://brightdata.com) → Account → API Token.
 
 ```bash
-# Option A — environment variable (recommended for local dev)
-export BRIGHTDATA_API_TOKEN=your_token_here
+# Option A — environment variables
+export BRIGHTDATA_API_KEY=your_api_key_here              # preferred
+export BRIGHTDATA_SERP_ZONE=your_existing_serp_zone      # required for search tools
 
 # Option B — OpenClaw config (recommended for persistent setups)
-openclaw config set plugins.entries.brightdata.config.webSearch.apiKey your_token_here
+openclaw config set plugins.entries.brightdata.config.webSearch.apiKey your_api_key_here
+openclaw config set plugins.entries.brightdata.config.webSearch.serpZone your_existing_serp_zone
 ```
 
-> The plugin automatically creates two proxy zones on first use: `mcp_unlocker` (Web Unlocker) and `mcp_browser` (Browser API). No manual zone setup required.
+> `brightdata_search` and `brightdata_search_batch` require a configured SERP zone. The plugin does not auto-create SERP zones.
+> Unlocker (`mcp_unlocker`) and browser (`mcp_browser`) zones are still auto-created on first use if missing.
 
 To use existing zones instead:
 
 ```bash
 export BRIGHTDATA_UNLOCKER_ZONE=my_existing_zone
 export BRIGHTDATA_BROWSER_ZONE=my_existing_browser_zone
+export BROWSER_AUTH='brd-customer-<customer>-zone-<zone>:<password>'  # optional browser fast-path
 ```
 
 ---
@@ -94,7 +98,7 @@ Search Google, Bing, or Yandex and get structured results back.
 
 ### `brightdata_search_batch`
 
-Run up to 5 search queries in parallel. Partial failures are returned inline without failing the whole batch.
+Run up to 5 search queries in parallel via async SERP (`async=1` submit + `serp/get_result` polling). Partial failures are returned inline without failing the whole batch.
 
 ---
 
@@ -119,7 +123,7 @@ Scrape up to 5 URLs in parallel with the same extraction options.
 
 ## Browser Automation
 
-Full Chromium browser control routed through Bright Data's residential proxy network. Sessions are automatically scoped per user context and idle-timeout after 10 minutes.
+Full Chromium browser control routed through Bright Data's residential proxy network. Sessions are automatically scoped per user context and idle-timeout after 5 minutes. Each `brightdata_browser_navigate` call starts a fresh scoped session and closes any previous one for that scope.
 
 | Tool | Description |
 |------|-------------|
@@ -135,8 +139,8 @@ Full Chromium browser control routed through Bright Data's residential proxy net
 | `brightdata_browser_scroll_to` | Scroll to a specific element by ref |
 | `brightdata_browser_wait_for` | Wait for an element to become visible |
 | `brightdata_browser_network_requests` | List network requests since page load |
-| `brightdata_browser_go_back` | Navigate back |
-| `brightdata_browser_go_forward` | Navigate forward |
+| `brightdata_browser_go_back` | Compatibility stub: returns unsupported-operation guidance |
+| `brightdata_browser_go_forward` | Compatibility stub: returns unsupported-operation guidance |
 
 ---
 
@@ -268,14 +272,16 @@ Structured data from real pages via Bright Data datasets. Each tool accepts a `u
 
 ## Configuration Reference
 
-All settings can be provided via environment variable or OpenClaw config. Environment variables take priority.
+All settings can be provided via OpenClaw config and environment variables.
 
 | Setting | Environment Variable | Config Path | Default |
 |---------|---------------------|-------------|---------|
-| API Token | `BRIGHTDATA_API_TOKEN` | `...webSearch.apiKey` | **required** |
+| API Key | `BRIGHTDATA_API_KEY` or `BRIGHTDATA_API_TOKEN` | `...webSearch.apiKey` | **required** (`BRIGHTDATA_API_KEY` preferred when both env vars are set) |
 | Base URL | `BRIGHTDATA_BASE_URL` | `...webSearch.baseUrl` | `https://api.brightdata.com` |
+| SERP Zone | `BRIGHTDATA_SERP_ZONE` | `...webSearch.serpZone` | **required for search** |
 | Unlocker Zone | `BRIGHTDATA_UNLOCKER_ZONE` | `...webSearch.unlockerZone` | `mcp_unlocker` |
-| Browser Zone | `BRIGHTDATA_BROWSER_ZONE` | `...webSearch.browserZone` | `mcp_browser` |
+| Browser Zone | `BRIGHTDATA_BROWSER_ZONE` | `...webSearch.browserZone` | `mcp_browser` (ignored if `BROWSER_AUTH` is set) |
+| Browser Auth Override | `BROWSER_AUTH` | — | unset |
 | Request Timeout | — | `...webSearch.timeoutSeconds` | `30s` search / `60s` scrape |
 | Polling Timeout | — | `...webSearch.pollingTimeoutSeconds` | `600s` |
 
@@ -310,7 +316,7 @@ openclaw plugins uninstall brightdata
 ## Requirements
 
 - OpenClaw installed and running
-- A [Bright Data account](https://brightdata.com) with API token
+- A [Bright Data account](https://brightdata.com) with API key
 - Node.js 22+ (managed by OpenClaw)
 
 ---

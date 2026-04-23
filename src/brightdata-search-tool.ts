@@ -56,7 +56,7 @@ export function createBrightDataSearchTool(api: OpenClawPluginApi) {
     name: "brightdata_search",
     label: "Bright Data Search",
     description:
-      "Search the web using Bright Data SERP scraping. Supports Google, Bing, and Yandex with pagination and geo targeting.",
+      "Search the web using Bright Data SERP scraping. Supports Google, Bing, and Yandex with pagination and geo targeting. Requires a configured Bright Data SERP zone.",
     parameters: BrightDataSearchToolSchema,
     execute: async (_toolCallId: string, rawParams: Record<string, unknown>) => {
       const query = readStringParam(rawParams, "query", { required: true });

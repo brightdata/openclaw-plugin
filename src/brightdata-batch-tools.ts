@@ -7,7 +7,7 @@ import {
   readStringParam,
 } from "openclaw/plugin-sdk/agent-runtime";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk/plugin-runtime";
-import { runBrightDataScrape, runBrightDataSearch } from "./brightdata-client.js";
+import { runBrightDataScrape, runBrightDataSearchAsync } from "./brightdata-client.js";
 
 function optionalStringEnum<const T extends readonly string[]>(
   values: T,
@@ -170,7 +170,7 @@ export function createBrightDataBatchTools(api: OpenClawPluginApi) {
       name: "brightdata_search_batch",
       label: "Bright Data Search Batch",
       description:
-        "Run up to 5 Bright Data search requests in parallel. Returns per-query results and preserves item-level failures.",
+        "Run up to 5 Bright Data search requests in parallel using async SERP retrieval. Returns per-query results and preserves item-level failures.",
       parameters: BrightDataSearchBatchToolSchema,
       execute: async (_toolCallId: string, rawParams: Record<string, unknown>) => {
         const queries = readSearchBatchQueries(rawParams);
@@ -180,7 +180,7 @@ export function createBrightDataBatchTools(api: OpenClawPluginApi) {
 
         const settled = await Promise.allSettled(
           queries.map((query) =>
-            runBrightDataSearch({
+            runBrightDataSearchAsync({
               pluginConfig: api.pluginConfig,
               query: query.query,
               engine: query.engine,

@@ -124,6 +124,7 @@ describe("brightdata plugin", () => {
     vi.useFakeTimers();
     vi.stubEnv("BRIGHTDATA_API_TOKEN", "test-token");
 
+    let progressCalls = 0;
     let snapshotCalls = 0;
     const withTrustedWebToolsEndpoint = vi.fn(
       async (
@@ -139,9 +140,9 @@ describe("brightdata plugin", () => {
             finalUrl: params.url,
           });
         }
-        if (params.url.includes("/datasets/v3/snapshot/snap-123")) {
-          snapshotCalls++;
-          if (snapshotCalls === 1) {
+        if (params.url.includes("/datasets/v3/progress/snap-123")) {
+          progressCalls++;
+          if (progressCalls === 1) {
             return await run({
               response: new Response(JSON.stringify({ status: "running" }), {
                 status: 200,
@@ -150,6 +151,16 @@ describe("brightdata plugin", () => {
               finalUrl: params.url,
             });
           }
+          return await run({
+            response: new Response(JSON.stringify({ status: "ready" }), {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            }),
+            finalUrl: params.url,
+          });
+        }
+        if (params.url.includes("/datasets/v3/snapshot/snap-123")) {
+          snapshotCalls++;
           return await run({
             response: new Response(JSON.stringify([{ id: "row-1", keep: "yes", drop: null }]), {
               status: 200,
@@ -192,8 +203,9 @@ describe("brightdata plugin", () => {
       snapshotId: "snap-123",
       data: [{ id: "row-1", keep: "yes" }],
     });
-    expect(snapshotCalls).toBe(2);
-    expect(withTrustedWebToolsEndpoint).toHaveBeenCalledTimes(3);
+    expect(progressCalls).toBe(2);
+    expect(snapshotCalls).toBe(1);
+    expect(withTrustedWebToolsEndpoint).toHaveBeenCalledTimes(4);
     expect(pollAttempts).toEqual([
       { attempt: 1, total: 2, snapshotId: "snap-123" },
       { attempt: 2, total: 2, snapshotId: "snap-123" },
@@ -201,7 +213,7 @@ describe("brightdata plugin", () => {
   });
 
   it("returns partial failures from batch search without failing the whole tool", async () => {
-    const runBrightDataSearch = vi
+    const runBrightDataSearchAsync = vi
       .fn()
       .mockResolvedValueOnce({ query: "alpha", results: [{ title: "Alpha" }] })
       .mockRejectedValueOnce(new Error("search failed"));
@@ -212,7 +224,7 @@ describe("brightdata plugin", () => {
       );
       return {
         ...actual,
-        runBrightDataSearch,
+        runBrightDataSearchAsync,
       };
     });
 
@@ -227,7 +239,7 @@ describe("brightdata plugin", () => {
       queries: [{ query: "alpha" }, { query: "beta", engine: "bing" }],
     });
 
-    expect(runBrightDataSearch).toHaveBeenCalledTimes(2);
+    expect(runBrightDataSearchAsync).toHaveBeenCalledTimes(2);
     expect(result.details).toEqual({
       total: 2,
       succeeded: 1,

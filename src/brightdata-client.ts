@@ -24,6 +24,7 @@ import {
   resolveBrightDataBrowserZone,
   resolveBrightDataPollingTimeoutSeconds,
   resolveBrightDataScrapeTimeoutSeconds,
+  resolveBrightDataSerpZone,
   resolveBrightDataSearchTimeoutSeconds,
   resolveBrightDataUnlockerZone,
 } from "./config.js";
@@ -43,6 +44,9 @@ const DEFAULT_ERROR_MAX_BYTES = 64_000;
 const DEFAULT_POLL_INTERVAL_MS = 1_000;
 
 const PENDING_WEB_DATA_STATUSES = new Set(["running", "building", "starting"]);
+const READY_WEB_DATA_STATUS = "ready";
+const FAILED_WEB_DATA_STATUS = "failed";
+const ASYNC_SERP_PENDING_STATUS_CODES = new Set([202, 204]);
 
 export type BrightDataSearchEngine = "google" | "bing" | "yandex";
 export type BrightDataScrapeExtractMode = "markdown" | "text" | "html";
@@ -196,29 +200,73 @@ export function buildBrightDataSearchUrl(params: {
   return `https://www.google.com/search?q=${encodedQuery}&start=${start}${geoParam}`;
 }
 
-async function throwBrightDataApiError(params: {
-  response: Response;
+function resolveResponseTextValue(value: unknown): string {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    typeof (value as Record<string, unknown>).text === "string"
+  ) {
+    return ((value as Record<string, unknown>).text as string).trim();
+  }
+  return "";
+}
+
+function isAsyncSerpDisabledError(params: { detail: string; code?: string }): boolean {
+  const normalized = `${params.code ?? ""} ${params.detail}`.toLowerCase();
+  return (
+    normalized.includes("async") &&
+    (normalized.includes("not enabled") ||
+      normalized.includes("enable async") ||
+      normalized.includes("isn't enabled") ||
+      normalized.includes("not available") ||
+      normalized.includes("unsupported"))
+  );
+}
+
+function throwBrightDataApiError(params: {
   errorLabel: string;
+  status: number;
+  statusText: string;
+  detail: string;
+  code?: string;
   unlockerZone?: string;
-}): Promise<never> {
-  const detail = await readResponseText(params.response, { maxBytes: DEFAULT_ERROR_MAX_BYTES });
-  const code = params.response.headers.get("x-brd-err-code") ?? undefined;
-  if (code === "client_10100" && params.unlockerZone === DEFAULT_BRIGHTDATA_UNLOCKER_ZONE) {
+  serpZone?: string;
+  asyncSerp?: boolean;
+}): never {
+  if (params.code === "client_10100" && params.unlockerZone === DEFAULT_BRIGHTDATA_UNLOCKER_ZONE) {
     throw new BrightDataApiError(
       "Bright Data free-tier usage limit reached for the default mcp_unlocker zone. Create a new Web Unlocker zone and configure BRIGHTDATA_UNLOCKER_ZONE or the Bright Data plugin unlocker zone setting before retrying.",
       {
-        status: params.response.status,
-        detail: detail.text || params.response.statusText,
-        code,
+        status: params.status,
+        detail: params.detail || params.statusText,
+        code: params.code,
+      },
+    );
+  }
+  if (
+    params.asyncSerp &&
+    params.serpZone &&
+    isAsyncSerpDisabledError({ detail: params.detail, code: params.code })
+  ) {
+    throw new BrightDataApiError(
+      `Bright Data SERP zone "${params.serpZone}" does not have async search enabled. Enable async requests in the SERP zone settings, or use a SERP zone that supports async.`,
+      {
+        status: params.status,
+        detail: params.detail || params.statusText,
+        code: params.code,
       },
     );
   }
   throw new BrightDataApiError(
-    `${params.errorLabel} API error (${params.response.status}): ${detail.text || params.response.statusText}`,
+    `${params.errorLabel} API error (${params.status}): ${params.detail || params.statusText}`,
     {
-      status: params.response.status,
-      detail: detail.text || params.response.statusText,
-      code,
+      status: params.status,
+      detail: params.detail || params.statusText,
+      code: params.code,
     },
   );
 }
@@ -254,7 +302,26 @@ async function requestBrightDataText(params: {
   body?: unknown;
   queryParams?: Record<string, string | number | boolean | undefined>;
   unlockerZone?: string;
+  serpZone?: string;
+  asyncSerp?: boolean;
 }): Promise<string> {
+  const response = await requestBrightDataRaw(params);
+  return response.text;
+}
+
+async function requestBrightDataRaw(params: {
+  baseUrl: string;
+  pathname: string;
+  apiToken: string;
+  timeoutSeconds: number;
+  errorLabel: string;
+  body?: unknown;
+  queryParams?: Record<string, string | number | boolean | undefined>;
+  unlockerZone?: string;
+  serpZone?: string;
+  asyncSerp?: boolean;
+  accept?: string;
+}): Promise<{ text: string; status: number; headers: Headers }> {
   const endpoint = appendQueryParams(
     resolveEndpoint(params.baseUrl, params.pathname),
     params.queryParams,
@@ -267,18 +334,32 @@ async function requestBrightDataText(params: {
         method: params.body === undefined ? "GET" : "POST",
         apiToken: params.apiToken,
         body: params.body,
-        accept: "text/plain, text/html, application/json;q=0.8, */*;q=0.5",
+        accept: params.accept ?? "text/plain, text/html, application/json;q=0.8, */*;q=0.5",
       }),
     },
     async ({ response }) => {
-      if (!response.ok) {
-        return await throwBrightDataApiError({
-          response,
-          errorLabel: params.errorLabel,
-          unlockerZone: params.unlockerZone,
-        });
+      if (response.ok) {
+        return {
+          text: await response.text(),
+          status: response.status,
+          headers: response.headers,
+        };
       }
-      return await response.text();
+
+      const detail = resolveResponseTextValue(
+        await readResponseText(response, { maxBytes: DEFAULT_ERROR_MAX_BYTES }),
+      );
+      const code = response.headers.get("x-brd-err-code") ?? undefined;
+      throwBrightDataApiError({
+        errorLabel: params.errorLabel,
+        status: response.status,
+        statusText: response.statusText,
+        detail,
+        code,
+        unlockerZone: params.unlockerZone,
+        serpZone: params.serpZone,
+        asyncSerp: params.asyncSerp,
+      });
     },
   );
 }
@@ -292,33 +373,21 @@ async function requestBrightDataJson(params: {
   body?: unknown;
   queryParams?: Record<string, string | number | boolean | undefined>;
   unlockerZone?: string;
+  serpZone?: string;
+  asyncSerp?: boolean;
 }): Promise<unknown> {
-  const endpoint = appendQueryParams(
-    resolveEndpoint(params.baseUrl, params.pathname),
-    params.queryParams,
-  );
-  return await withTrustedWebToolsEndpoint(
-    {
-      url: endpoint,
-      timeoutSeconds: params.timeoutSeconds,
-      init: buildRequestInit({
-        method: params.body === undefined ? "GET" : "POST",
-        apiToken: params.apiToken,
-        body: params.body,
-        accept: "application/json",
-      }),
-    },
-    async ({ response }) => {
-      if (!response.ok) {
-        return await throwBrightDataApiError({
-          response,
-          errorLabel: params.errorLabel,
-          unlockerZone: params.unlockerZone,
-        });
-      }
-      return (await response.json()) as unknown;
-    },
-  );
+  const response = await requestBrightDataRaw({
+    ...params,
+    accept: "application/json",
+  });
+  if (!response.text.trim()) {
+    return null;
+  }
+  try {
+    return JSON.parse(response.text) as unknown;
+  } catch {
+    throw new Error(`${params.errorLabel} API returned invalid JSON.`);
+  }
 }
 
 async function ensureConfiguredBrightDataZoneExists(params: {
@@ -562,20 +631,64 @@ function buildSearchPayload(params: {
   };
 }
 
+function resolveApiKeyMissingMessage(toolName: string): string {
+  return `${toolName} needs a Bright Data API key. Set BRIGHTDATA_API_KEY (preferred) or BRIGHTDATA_API_TOKEN in the Gateway environment, or configure plugins.entries.brightdata.config.webSearch.apiKey.`;
+}
+
+function resolveSerpZoneRequired(
+  pluginConfig?: Record<string, unknown> | BrightDataPluginConfig,
+): string {
+  const serpZone = resolveBrightDataSerpZone(pluginConfig);
+  if (!serpZone) {
+    throw new Error(
+      "Bright Data search requires a SERP zone. Set BRIGHTDATA_SERP_ZONE in the environment, or configure plugins.entries.brightdata.config.webSearch.serpZone.",
+    );
+  }
+  return serpZone;
+}
+
+function buildBrightDataSerpRequestUrl(params: {
+  query: string;
+  engine: BrightDataSearchEngine;
+  cursor?: string;
+  geoLocation?: string;
+}): string {
+  const requestUrlBase = buildBrightDataSearchUrl({
+    query: params.query,
+    engine: params.engine,
+    cursor: params.cursor,
+    geoLocation: params.geoLocation,
+  });
+  return params.engine === "google"
+    ? `${requestUrlBase}${requestUrlBase.includes("?") ? "&" : "?"}brd_json=1`
+    : requestUrlBase;
+}
+
+function buildBrightDataSerpRequestBody(params: {
+  requestUrl: string;
+  serpZone: string;
+  engine: BrightDataSearchEngine;
+}): Record<string, unknown> {
+  return {
+    url: params.requestUrl,
+    zone: params.serpZone,
+    format: "raw",
+    ...(params.engine === "google" ? { data_format: "parsed_light" } : { data_format: "markdown" }),
+  };
+}
+
 export async function runBrightDataSearch(
   params: BrightDataSearchParams,
 ): Promise<Record<string, unknown>> {
   const apiToken = resolveBrightDataApiToken(params.pluginConfig);
   if (!apiToken) {
-    throw new Error(
-      "web_search (brightdata) needs a Bright Data API token. Set BRIGHTDATA_API_TOKEN in the Gateway environment, or configure plugins.entries.brightdata.config.webSearch.apiKey.",
-    );
+    throw new Error(resolveApiKeyMissingMessage("web_search (brightdata)"));
   }
   const engine = params.engine ?? "google";
   const count = normalizeSearchCount(params.count);
   const timeoutSeconds = resolveBrightDataSearchTimeoutSeconds(params.timeoutSeconds);
   const baseUrl = resolveBrightDataBaseUrl(params.pluginConfig);
-  const unlockerZone = resolveBrightDataUnlockerZone(params.pluginConfig);
+  const serpZone = resolveSerpZoneRequired(params.pluginConfig);
   const geoLocation = normalizeGeoLocation(params.geoLocation);
   const cacheKey = normalizeCacheKey(
     JSON.stringify({
@@ -586,25 +699,19 @@ export async function runBrightDataSearch(
       cursor: params.cursor ?? "",
       geoLocation: geoLocation ?? "",
       baseUrl,
-      unlockerZone,
+      serpZone,
     }),
   );
   const cached = readCache(SEARCH_CACHE, cacheKey);
   if (cached) {
     return { ...cached.value, cached: true };
   }
-  await ensureBrightDataUnlockerZoneExists(params.pluginConfig, timeoutSeconds);
-
-  const requestUrlBase = buildBrightDataSearchUrl({
+  const requestUrl = buildBrightDataSerpRequestUrl({
     query: params.query,
     engine,
     cursor: params.cursor,
     geoLocation,
   });
-  const requestUrl =
-    engine === "google"
-      ? `${requestUrlBase}${requestUrlBase.includes("?") ? "&" : "?"}brd_json=1`
-      : requestUrlBase;
   const startedAt = Date.now();
   const body = await requestBrightDataText({
     baseUrl,
@@ -612,13 +719,12 @@ export async function runBrightDataSearch(
     apiToken,
     timeoutSeconds,
     errorLabel: "Bright Data Search",
-    unlockerZone,
-    body: {
-      url: requestUrl,
-      zone: unlockerZone,
-      format: "raw",
-      ...(engine === "google" ? { data_format: "parsed_light" } : { data_format: "markdown" }),
-    },
+    serpZone,
+    body: buildBrightDataSerpRequestBody({
+      requestUrl,
+      serpZone,
+      engine,
+    }),
   });
   const result = buildSearchPayload({
     query: params.query,
@@ -635,6 +741,80 @@ export async function runBrightDataSearch(
     resolveCacheTtlMs(undefined, DEFAULT_CACHE_TTL_MINUTES),
   );
   return result;
+}
+
+export async function runBrightDataSearchAsync(
+  params: BrightDataSearchParams,
+): Promise<Record<string, unknown>> {
+  const apiToken = resolveBrightDataApiToken(params.pluginConfig);
+  if (!apiToken) {
+    throw new Error(resolveApiKeyMissingMessage("brightdata_search_batch"));
+  }
+  const engine = params.engine ?? "google";
+  const count = normalizeSearchCount(params.count);
+  const timeoutSeconds = resolveBrightDataSearchTimeoutSeconds(params.timeoutSeconds);
+  const baseUrl = resolveBrightDataBaseUrl(params.pluginConfig);
+  const serpZone = resolveSerpZoneRequired(params.pluginConfig);
+  const geoLocation = normalizeGeoLocation(params.geoLocation);
+  const requestUrl = buildBrightDataSerpRequestUrl({
+    query: params.query,
+    engine,
+    cursor: params.cursor,
+    geoLocation,
+  });
+  const startedAt = Date.now();
+
+  const submitResponse = await requestBrightDataRaw({
+    baseUrl,
+    pathname: "/request",
+    apiToken,
+    timeoutSeconds,
+    errorLabel: "Bright Data Search async submit",
+    queryParams: { async: 1 },
+    serpZone,
+    asyncSerp: true,
+    body: buildBrightDataSerpRequestBody({
+      requestUrl,
+      serpZone,
+      engine,
+    }),
+  });
+  const responseId = submitResponse.headers.get("x-response-id")?.trim();
+  if (!responseId) {
+    throw new Error(
+      `Bright Data async search did not return x-response-id for SERP zone "${serpZone}". Ensure async is enabled for that zone and retry.`,
+    );
+  }
+
+  while (Date.now() - startedAt < timeoutSeconds * 1_000) {
+    const pollResponse = await requestBrightDataRaw({
+      baseUrl,
+      pathname: "/serp/get_result",
+      apiToken,
+      timeoutSeconds,
+      errorLabel: "Bright Data Search async result",
+      queryParams: { response_id: responseId },
+      serpZone,
+      asyncSerp: true,
+    });
+    if (ASYNC_SERP_PENDING_STATUS_CODES.has(pollResponse.status) || !pollResponse.text.trim()) {
+      await sleep(DEFAULT_POLL_INTERVAL_MS);
+      continue;
+    }
+
+    return buildSearchPayload({
+      query: params.query,
+      engine,
+      cursor: params.cursor,
+      geoLocation,
+      items: resolveBrightDataSearchItems({ engine, body: pollResponse.text }).slice(0, count),
+      tookMs: Date.now() - startedAt,
+    });
+  }
+
+  throw new Error(
+    `Timeout after ${timeoutSeconds} seconds waiting for Bright Data async SERP response (${responseId}).`,
+  );
 }
 
 function normalizeMarkdownContent(value: string): string {
@@ -684,9 +864,7 @@ export async function runBrightDataScrape(
 ): Promise<Record<string, unknown>> {
   const apiToken = resolveBrightDataApiToken(params.pluginConfig);
   if (!apiToken) {
-    throw new Error(
-      "brightdata_scrape needs a Bright Data API token. Set BRIGHTDATA_API_TOKEN in the Gateway environment, or configure plugins.entries.brightdata.config.webSearch.apiKey.",
-    );
+    throw new Error(resolveApiKeyMissingMessage("brightdata_scrape"));
   }
   const baseUrl = resolveBrightDataBaseUrl(params.pluginConfig);
   const unlockerZone = resolveBrightDataUnlockerZone(params.pluginConfig);
@@ -768,6 +946,22 @@ function readSnapshotStatus(value: unknown): string | undefined {
   return typeof status === "string" && status.trim() ? status.trim().toLowerCase() : undefined;
 }
 
+function readProgressFailureMessage(value: unknown): string | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  const record = value as Record<string, unknown>;
+  const errorMessage = record.error_message;
+  if (typeof errorMessage === "string" && errorMessage.trim()) {
+    return errorMessage.trim();
+  }
+  const message = record.message;
+  if (typeof message === "string" && message.trim()) {
+    return message.trim();
+  }
+  return undefined;
+}
+
 export function normalizeBrightDataWebDataPayload(params: {
   datasetId: string;
   snapshotId: string;
@@ -792,7 +986,13 @@ export function normalizeBrightDataWebDataPayload(params: {
 }
 
 function isRetryablePollingError(error: unknown): boolean {
-  return !(error instanceof BrightDataApiError && error.status === 400);
+  if (error instanceof BrightDataApiError && error.status === 400) {
+    return false;
+  }
+  if (error instanceof Error && error.message.startsWith("Bright Data dataset run failed")) {
+    return false;
+  }
+  return true;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -804,9 +1004,7 @@ export async function runBrightDataWebData(
 ): Promise<Record<string, unknown>> {
   const apiToken = resolveBrightDataApiToken(params.pluginConfig);
   if (!apiToken) {
-    throw new Error(
-      "Bright Data web_data tools need a Bright Data API token. Set BRIGHTDATA_API_TOKEN in the Gateway environment, or configure plugins.entries.brightdata.config.webSearch.apiKey.",
-    );
+    throw new Error(resolveApiKeyMissingMessage("Bright Data web_data tools"));
   }
   const baseUrl = resolveBrightDataBaseUrl(params.pluginConfig);
   const timeoutSeconds = resolveBrightDataSearchTimeoutSeconds(params.timeoutSeconds);
@@ -827,7 +1025,7 @@ export async function runBrightDataWebData(
       include_errors: true,
       ...(params.triggerParams ?? {}),
     },
-    body: [input],
+    body: { input: [input] },
   });
 
   const snapshotId =
@@ -852,6 +1050,33 @@ export async function runBrightDataWebData(
       });
     }
     try {
+      const progressPayload = await requestBrightDataJson({
+        baseUrl,
+        pathname: `/datasets/v3/progress/${encodeURIComponent(snapshotId)}`,
+        apiToken,
+        timeoutSeconds,
+        errorLabel: `${toolName} progress`,
+      });
+      const status = readSnapshotStatus(progressPayload);
+      if (status === FAILED_WEB_DATA_STATUS) {
+        const failureMessage = readProgressFailureMessage(progressPayload);
+        throw new Error(
+          failureMessage
+            ? `Bright Data dataset run failed: ${failureMessage}`
+            : "Bright Data dataset run failed.",
+        );
+      }
+      if (status !== READY_WEB_DATA_STATUS) {
+        if (!status || PENDING_WEB_DATA_STATUSES.has(status)) {
+          attempts++;
+          await sleep(DEFAULT_POLL_INTERVAL_MS);
+          continue;
+        }
+        attempts++;
+        await sleep(DEFAULT_POLL_INTERVAL_MS);
+        continue;
+      }
+
       const snapshotPayload = await requestBrightDataJson({
         baseUrl,
         pathname: `/datasets/v3/snapshot/${encodeURIComponent(snapshotId)}`,
@@ -860,12 +1085,6 @@ export async function runBrightDataWebData(
         errorLabel: `${toolName} snapshot`,
         queryParams: { format: "json" },
       });
-      const status = readSnapshotStatus(snapshotPayload);
-      if (status && PENDING_WEB_DATA_STATUSES.has(status)) {
-        attempts++;
-        await sleep(DEFAULT_POLL_INTERVAL_MS);
-        continue;
-      }
       return normalizeBrightDataWebDataPayload({
         datasetId: params.datasetId,
         snapshotId,
@@ -892,13 +1111,19 @@ export async function runBrightDataWebData(
 }
 
 export const __testing = {
+  ASYNC_SERP_PENDING_STATUS_CODES,
   BrightDataApiError,
+  buildBrightDataSerpRequestBody,
+  buildBrightDataSerpRequestUrl,
   buildBrightDataSearchUrl,
   cleanGoogleSearchPayload,
   ensureBrightDataBrowserZoneExists,
   ensureBrightDataUnlockerZoneExists,
+  isAsyncSerpDisabledError,
   normalizeBrightDataWebDataPayload,
   parseBrightDataScrapeBody,
+  readProgressFailureMessage,
+  resolveApiKeyMissingMessage,
   resetEnsuredBrightDataZones: () => {
     resetEnsuredBrightDataZones();
   },

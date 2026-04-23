@@ -34,8 +34,8 @@ describe("brightdata unlocker zone bootstrap", () => {
     vi.stubEnv("BRIGHTDATA_API_TOKEN", "test-token");
   });
 
-  it("ensures the unlocker zone once before Bright Data search requests", async () => {
-    const { __testing, runBrightDataSearch } = await import("../src/brightdata-client.js");
+  it("ensures the unlocker zone once before Bright Data scrape requests", async () => {
+    const { __testing, runBrightDataScrape } = await import("../src/brightdata-client.js");
     __testing.resetEnsuredBrightDataZones();
 
     withTrustedWebToolsEndpointMock.mockImplementation(
@@ -66,22 +66,16 @@ describe("brightdata unlocker zone bootstrap", () => {
           });
         }
         if (params.url.endsWith("/request")) {
+          expect(JSON.parse(String(params.init?.body ?? ""))).toMatchObject({
+            zone: "mcp_unlocker",
+            format: "raw",
+            data_format: "markdown",
+          });
           return await run({
-            response: new Response(
-              JSON.stringify({
-                organic: [
-                  {
-                    title: "Docs",
-                    link: "https://docs.example.com/path",
-                    description: "Reference docs",
-                  },
-                ],
-              }),
-              {
-                status: 200,
-                headers: { "Content-Type": "application/json" },
-              },
-            ),
+            response: new Response("# Example\n\nReference docs", {
+              status: 200,
+              headers: { "Content-Type": "text/plain" },
+            }),
             finalUrl: params.url,
           });
         }
@@ -90,12 +84,12 @@ describe("brightdata unlocker zone bootstrap", () => {
     );
 
     const [first, second] = await Promise.all([
-      runBrightDataSearch({ query: "alpha" }),
-      runBrightDataSearch({ query: "beta" }),
+      runBrightDataScrape({ url: "https://example.com/alpha", extractMode: "markdown" }),
+      runBrightDataScrape({ url: "https://example.com/beta", extractMode: "markdown" }),
     ]);
 
-    expect(first.results).toHaveLength(1);
-    expect(second.results).toHaveLength(1);
+    expect(first.extractor).toBe("brightdata");
+    expect(second.extractor).toBe("brightdata");
     expect(
       withTrustedWebToolsEndpointMock.mock.calls.filter((call) =>
         String(call[0]?.url).endsWith("/zone/get_active_zones"),

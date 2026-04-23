@@ -81,6 +81,7 @@ describe("brightdata manifest schema surfaces", () => {
 
     expect(properties.apiKey).toBeTruthy();
     expect(properties.baseUrl).toMatchObject({ type: "string" });
+    expect(properties.serpZone).toMatchObject({ type: "string" });
     expect(properties.unlockerZone).toMatchObject({ type: "string" });
     expect(properties.browserZone).toMatchObject({ type: "string" });
     expect(properties.timeoutSeconds).toMatchObject({ type: "integer", minimum: 1 });
