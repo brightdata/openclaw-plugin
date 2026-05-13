@@ -210,6 +210,18 @@ Structured data from real pages via Bright Data datasets. Each tool accepts a `u
 | `brightdata_x_posts` | Post content and metrics |
 | `brightdata_x_profile_posts` | Profile post history |
 
+**Companion X/Twitter workflow**
+
+Use Bright Data's X tools when you have known X post or profile URLs and need structured post or profile-post data. Use [TweetClaw](https://github.com/Xquik-dev/tweetclaw) when the same OpenClaw workflow needs X/Twitter-specific search, actions, or automation beyond URL-backed dataset lookups.
+
+```bash
+openclaw plugins install @xquik/tweetclaw
+```
+
+- Use Bright Data for web search, scraping, browser automation, and structured data from known X post or profile URLs.
+- Use TweetClaw's `explore` tool to find the right X/Twitter endpoint for tweet search, reply search, follower export, user lookup, media workflows, monitors, webhooks, DMs, or giveaway draws.
+- Use TweetClaw's `tweetclaw` tool only after approval for visible X/Twitter actions such as post tweets, post tweet replies, likes, retweets, follows, DMs, media uploads, monitor creation, webhook changes, or giveaway draws.
+
 **YouTube & Reddit**
 | Tool | Data |
 |------|------|
